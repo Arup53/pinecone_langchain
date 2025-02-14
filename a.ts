@@ -15,6 +15,9 @@ import { concat } from "@langchain/core/utils/stream";
 import { StateGraph } from "@langchain/langgraph";
 import { PineconeStore } from "@langchain/pinecone";
 import { Pinecone as PineconeClient } from "@pinecone-database/pinecone";
+import { PromptTemplate } from "@langchain/core/prompts";
+import { StringOutputParser } from "@langchain/core/output_parsers";
+import { createStuffDocumentsChain } from "langchain/chains/combine_documents";
 
 const llm = new ChatGroq({
   apiKey: process.env.GROQ_API_KEY,
@@ -60,11 +63,41 @@ const vectorStore = await PineconeStore.fromExistingIndex(embeddings, {
 await vectorStore.addDocuments(allSplits);
 
 const retriever = vectorStore.asRetriever({
-  k: 2, // number of results
+  k: 5, // number of results
 });
 
-const res = await retriever.invoke("What is Task Decomposition?");
-console.log(res);
+// const res = await retriever.invoke("What is Task Decomposition?");
+// console.log(res);
+
+const customTemplate = `Use the following pieces of context to answer the question at the end.
+If you don't know the answer, just say that you don't know, don't try to make up an answer.
+Use three sentences maximum and keep the answer as concise as possible.
+Always say "thanks for asking!" at the end of the answer.
+
+{context}
+
+Question: {question}
+
+Answer:`;
+
+const customRagPrompt = PromptTemplate.fromTemplate(customTemplate);
+
+const customRagChain = await createStuffDocumentsChain({
+  llm: llm,
+  prompt: customRagPrompt,
+  outputParser: new StringOutputParser(), // output result as string
+});
+
+const userQuery = "What is Task Decomposition?";
+
+const context = await retriever.invoke(userQuery);
+
+const res = await customRagChain.invoke({
+  question: userQuery,
+  context,
+});
+
+console.log("res", res);
 
 // const promptTemplate = await pull<ChatPromptTemplate>("rlm/rag-prompt");
 
