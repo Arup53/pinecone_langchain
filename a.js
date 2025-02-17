@@ -31,16 +31,23 @@ const splitter = new RecursiveCharacterTextSplitter({
 });
 const allSplits = await splitter.splitDocuments(docs);
 console.log(allSplits.length);
+const namespace = "foo";
 const pinecone = new PineconeClient();
 const pineconeIndex = pinecone.Index(process.env.PINECONE_INDEX);
+const stats = await pineconeIndex.describeIndexStats();
+const namespaces = Object.keys(stats.namespaces || {});
+const exists = namespaces.includes(namespace);
+console.log(exists);
 const vectorStore = await PineconeStore.fromExistingIndex(embeddings, {
     pineconeIndex,
     // Maximum number of batch requests to allow at once. Each batch is 1000 vectors.
     maxConcurrency: 5,
     // You can pass a namespace here too
-    // namespace: "foo",
+    namespace: namespace,
 });
-await vectorStore.addDocuments(allSplits);
+if (!exists) {
+    await vectorStore.addDocuments(allSplits);
+}
 const retriever = vectorStore.asRetriever({
     k: 5, // number of results
 });
